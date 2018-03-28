@@ -1,0 +1,68 @@
+version: "3.3"
+
+services:
+  web:
+    image: cabotapp/cabot:${CABOT_VERSION}
+    env_file:
+      - conf/default.env
+      - conf/${CABOT_ENVIRONMENT}.env
+    restart: always
+    command: sh -c "cabot migrate && gunicorn cabot.wsgi:application -b 0.0.0.0:5000 --workers=5"
+    #healthcheck:
+    # test: "curl http://localhost:5000/status"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  worker:
+    image: cabotapp/cabot:${CABOT_VERSION}
+    env_file:
+      - conf/default.env
+      - conf/${CABOT_ENVIRONMENT}.env
+    restart: always
+    command: celery worker -A cabot
+    depends_on:
+      - web
+      - postgres
+      - rabbitmq
+
+  beat:
+    image: cabotapp/cabot:${CABOT_VERSION}
+    env_file:
+      - conf/default.env
+      - conf/${CABOT_ENVIRONMENT}.env
+    restart: always
+    command: celery beat -A cabot
+    depends_on:
+      - web
+      - postgres
+      - rabbitmq
+
+  caddy:
+    image: abiosoft/caddy
+    ports:
+      - '80:80'
+      - '443:443'
+    depends_on:
+      - web
+    volumes:
+      #- ./.caddy:/root/.caddy
+      - ./conf/Caddyfile:/etc/Caddyfile
+
+  postgres:
+    image: postgres:9.6-alpine
+    volumes:
+     # - data:/var/lib/postgresql/data
+      - /data/volumes/postgres:/etc/postgres
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3.6-alpine
+    restart: always
+
+
+volumes:
+  data:
+
